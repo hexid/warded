@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/cep21/xdgbasedir"
 	"github.com/hexid/warded/wutil"
-	"golang.org/x/sys/unix"
 	"os"
 	"path"
 	"strconv"
@@ -14,7 +13,7 @@ import (
 )
 
 func main() {
-	memErr := unix.Mlockall(syscall.MCL_CURRENT | syscall.MCL_FUTURE)
+	memErr := syscall.Mlockall(syscall.MCL_CURRENT | syscall.MCL_FUTURE)
 	if memErr != nil {
 		panic(memErr)
 	}
