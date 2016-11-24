@@ -9,5 +9,5 @@ import (
 
 // It's unlikely that this actually sits on memory
 func GetMemFile(name string) (*os.File, error) {
-	return ioutil.TempFile(os.Getenv("WARDED_TMPDIR", name)
+	return ioutil.TempFile(os.Getenv("WARDED_TMPDIR", name))
 }
