@@ -31,5 +31,6 @@
 	- Replaces the existing master key and a new master key
 	- This operation will create a new temporary ward to ensure that the existing ward is not left in an inconsistent state in the case of failure/interruption
 
-	`show <passName>` (default)
+- `show <passName>`
 	- Prints the given passphrase
+

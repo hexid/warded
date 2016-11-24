@@ -12,5 +12,5 @@ func GetMemFile(name string) (*os.File, error) {
 	if dir == "" {
 		dir = "/dev/shm"
 	}
-	return ioutil.TempFile("/dev/shm", name)
+	return ioutil.TempFile(dir, name)
 }

@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 )
 
-type RandStrDict uint64
+type RandStrDict uint32
 
 const (
 	RandAlpha RandStrDict = 1 << 0
