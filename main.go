@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"github.com/cep21/xdgbasedir"
@@ -62,11 +61,3 @@ func main() {
 	}
 }
 
-func setupDirectory(dataDir string) {
-	os.MkdirAll(dataDir, 0700)
-}
-
-func confirmMasterKey(key []byte) bool {
-	confirm := readMasterKey()
-	return bytes.Equal(key, confirm)
-}

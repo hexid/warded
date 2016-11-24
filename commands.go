@@ -204,6 +204,11 @@ func readMasterKey() []byte {
 	return key
 }
 
+func confirmMasterKey(key []byte) bool {
+	confirm := readMasterKey()
+	return bytes.Equal(key, confirm)
+}
+
 func editorTemp(wardDir string, pass []byte) []byte {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -250,3 +255,4 @@ func editorTemp(wardDir string, pass []byte) []byte {
 
 	return buf.Bytes()
 }
+
