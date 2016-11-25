@@ -10,7 +10,7 @@
 
 ### Options
 
-- `-w {wardName}`
+- `--ward {wardName}`
 	- Select a ward to operate on
 	- Defaults to `default` if not supplied
 
@@ -20,9 +20,10 @@
 - `edit <passName>`
 	- Edit/create a passphrase using `$EDITOR`
 
-- `generate <passName> <passLength>`
+- `generate <passLength> [<passName>]`
 	- Generates a new passphrase
 	- If `passName` already exists, only the first line will be replaced
+	- If `passName` isn't provided, then a passphrase will be generated and printed to stdout
 
 - `ls`, `list`
 	- List passphrases in a ward

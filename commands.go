@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"github.com/hexid/warded/wutil"
 	"golang.org/x/crypto/ssh/terminal"
@@ -17,7 +18,7 @@ import (
 	"syscall"
 )
 
-func EditPassphrase(wardDir string, passName string) {
+func EditPassphrase(wardDir string, passName string) error {
 	passPath := path.Join(wardDir, passName)
 	masterKey := readMasterKey()
 
@@ -32,29 +33,30 @@ func EditPassphrase(wardDir string, passName string) {
 
 		_, err = checkPass.Decrypt(masterKey)
 		if err != nil {
-			log.Fatal("Only one master key is allowed per ward")
+			return errors.New("Only one master key is allowed per ward")
 		}
 
 		pass = []byte{}
 	} else {
 		pass, err = warded.Decrypt(masterKey)
 		if err != nil {
-			log.Fatal("Invalid master key")
+			return errors.New("Invalid master key")
 		}
 	}
 
 	plaintext := editorTemp(wardDir, pass)
 
 	if bytes.Equal(plaintext, pass) {
-		log.Fatal("Passphrase unchanged")
+		return errors.New("Passphrase unchanged")
 	}
 
 	warded.Encrypt(masterKey, plaintext)
 	warded.Write(passPath, 0600)
 	fmt.Println("Modified passphrase")
+	return nil
 }
 
-func RekeyWard(dir string, wardName string) {
+func RekeyWard(dir string, wardName string) error {
 	wardDir := path.Join(dir, wardName)
 	passphrases := getPassphrases(wardDir)
 
@@ -65,15 +67,13 @@ func RekeyWard(dir string, wardName string) {
 	newMasterKey := readMasterKey()
 
 	fmt.Print("Confirm New ")
-	confirm := confirmMasterKey(newMasterKey)
-
-	if !confirm {
-		log.Fatal("Confirmation does not match new master key")
+	if confirm := confirmMasterKey(newMasterKey); !confirm {
+		return errors.New("Confirmation does not match new master key")
 	}
 
 	tmpDir, tmpErr := ioutil.TempDir(dir, wardName)
 	if tmpErr != nil {
-		panic(tmpErr)
+		return tmpErr
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -88,9 +88,7 @@ func RekeyWard(dir string, wardName string) {
 
 	os.RemoveAll(wardDir)
 	mvErr := os.Rename(tmpDir, wardDir)
-	if mvErr != nil {
-		panic(mvErr)
-	}
+	return mvErr
 }
 
 func GetPassphrase(passPath string) []byte {
@@ -107,7 +105,7 @@ func GetPassphrase(passPath string) []byte {
 	return pass
 }
 
-func GeneratePassphrase(wardDir string, passName string, randSize uint64, randType wutil.RandStrDict) (string, string) {
+func ReplacePassphrase(wardDir string, passName string, passStr string) (string, error) {
 	passPath := path.Join(wardDir, passName)
 
 	masterKey := readMasterKey()
@@ -115,35 +113,32 @@ func GeneratePassphrase(wardDir string, passName string, randSize uint64, randTy
 
 	var pass []byte
 	if err != nil {
+		// passName does not exist, get a random passphrase
 		checkPass := getRandPassphrase(wardDir)
 
-		_, err = checkPass.Decrypt(masterKey)
-		if err != nil {
-			log.Fatal("Only one master key is allowed per ward")
+		// check that the provided master key can decrypt the random passphrase
+		if _, err = checkPass.Decrypt(masterKey); err != nil {
+			return "", errors.New("Only one master key is allowed per ward")
 		}
 
 		pass = []byte{}
-	} else {
-		pass, err = warded.Decrypt(masterKey)
-		if err != nil {
-			log.Fatal("Invalid master key")
-		}
+	} else if pass, err = warded.Decrypt(masterKey); err != nil {
+		return "", errors.New("Invalid master key")
 	}
 
 	var index int
 	var value byte
 	for index, value = range pass {
-		if value == byte('\n') {
+		if value == '\n' {
 			break
 		}
 	}
 
-	random := wutil.RandStr(randSize, randType)
-	newPass := []byte(random + string(pass[index:]))
+	newPass := []byte(passStr + string(pass[index:]))
 	warded.Encrypt(masterKey, newPass)
 	warded.Write(passPath, 0600)
 
-	return string(pass[:index]), random
+	return string(pass[:index]), nil
 }
 
 func getPassphrases(dir string) map[string]WardedPassphrase {
@@ -255,4 +250,3 @@ func editorTemp(wardDir string, pass []byte) []byte {
 
 	return buf.Bytes()
 }
-
