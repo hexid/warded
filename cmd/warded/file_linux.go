@@ -1,12 +1,13 @@
 // +build linux
 
-package wutil
+package main
 
 import (
 	"io/ioutil"
 	"os"
 )
 
+// GetMemFile returns a shared memory file on Linux
 func GetMemFile(name string) (*os.File, error) {
 	dir := os.Getenv("WARDED_TMPDIR")
 	if dir == "" {
