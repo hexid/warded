@@ -283,6 +283,8 @@ func (w Ward) checkKey() (err error) {
 		// there were no existing passphrases in the ward
 		// this isn't considered an error
 		return
+	} else if plen == 1 {
+		return fmt.Errorf("Invalid master key")
 	}
 
 	var rind *big.Int
