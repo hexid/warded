@@ -6,11 +6,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/codahale/chacha20poly1305"
-	"golang.org/x/crypto/scrypt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/codahale/chacha20poly1305"
 )
 
 // Passphrase is the encrypted passphrase
@@ -19,18 +19,29 @@ type Passphrase struct {
 	Salt       []byte `json:"salt"`
 	Ciphertext []byte `json:"ciphertext"`
 	Filename   string `json:"-"`
+	Scrypt     Scrypt `json:"scrypt"`
+}
+
+func defaultPassphrase() *Passphrase {
+	return &Passphrase{
+		Scrypt: Scrypt{
+			Iterations: 16384, // 2**14
+			BlockSize:  8,
+			Parallel:   1,
+		},
+	}
 }
 
 // NewPassphrase creates a new encrypted passphrase.
 // A new passphrase should be generated every time the plaintext is changed
 func NewPassphrase(masterKey []byte, plaintext []byte) (*Passphrase, error) {
-	pass := Passphrase{}
+	pass := defaultPassphrase()
 
 	// new salt on every encrypt
 	pass.Salt = make([]byte, 8)
 	rand.Read(pass.Salt)
 
-	key, err := scrypt.Key(masterKey, pass.Salt, 16384, 8, 1, 32)
+	key, err := pass.Scrypt.NewKey(masterKey, pass.Salt)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +56,7 @@ func NewPassphrase(masterKey []byte, plaintext []byte) (*Passphrase, error) {
 	rand.Read(pass.Nonce)
 
 	pass.Ciphertext = aead.Seal(nil, pass.Nonce, plaintext, nil)
-	return &pass, nil
+	return pass, nil
 }
 
 // ReadPassphrase reads the given file and returns a Passphrase
@@ -56,7 +67,7 @@ func ReadPassphrase(filename string) (*Passphrase, error) {
 		return nil, err
 	}
 
-	pass := &Passphrase{}
+	pass := defaultPassphrase()
 	json.Unmarshal(data, pass)
 	pass.Filename = filename
 
@@ -73,7 +84,7 @@ func (pass Passphrase) Decrypt(masterKey []byte) ([]byte, error) {
 	var plaintext, key []byte
 	var aead cipher.AEAD
 	var err error
-	if key, err = scrypt.Key(masterKey, pass.Salt, 16384, 8, 1, 32); err == nil {
+	if key, err = pass.Scrypt.NewKey(masterKey, pass.Salt); err == nil {
 		if aead, err = chacha20poly1305.New(key); err == nil {
 			plaintext, err = aead.Open(nil, pass.Nonce, pass.Ciphertext, nil)
 		}

@@ -138,13 +138,13 @@ func (w Ward) Path(passName string) string {
 
 // Rekey changes the master key for the entire ward.
 // Any errors will cancel the operation, leaving the ward with the existing key.
-func (w Ward) Rekey(newMasterKey []byte) error {
+func (w Ward) Rekey(newMasterKey []byte, tempDir string) error {
 	passphrases, err := w.Map()
 	if err != nil {
 		return err
 	}
 
-	tmpDir, err := ioutil.TempDir("", "warded")
+	tmpDir, err := ioutil.TempDir(tempDir, "rekey")
 	if err != nil {
 		return err
 	}
