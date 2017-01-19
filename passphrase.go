@@ -22,38 +22,39 @@ type Passphrase struct {
 	Scrypt     Scrypt `json:"scrypt"`
 }
 
-func defaultPassphrase() *Passphrase {
+func defaultPassphrase(config WardConfig) *Passphrase {
 	return &Passphrase{
-		Scrypt: Scrypt{
-			Iterations: 16384, // 2**14
-			BlockSize:  8,
-			Parallel:   1,
-		},
+		Scrypt: config.Scrypt,
 	}
 }
 
 // NewPassphrase creates a new encrypted passphrase.
 // A new passphrase should be generated every time the plaintext is changed
-func NewPassphrase(masterKey []byte, plaintext []byte) (*Passphrase, error) {
-	pass := defaultPassphrase()
+func (w Ward) NewPassphrase(plaintext []byte) (*Passphrase, error) {
+	var err error
+	var key []byte
+	var aead cipher.AEAD
+	pass := defaultPassphrase(w.Config)
 
 	// new salt on every encrypt
 	pass.Salt = make([]byte, 8)
-	rand.Read(pass.Salt)
-
-	key, err := pass.Scrypt.NewKey(masterKey, pass.Salt)
-	if err != nil {
+	if _, err = rand.Read(pass.Salt); err != nil {
 		return nil, err
 	}
 
-	aead, err := chacha20poly1305.New(key)
-	if err != nil {
+	if key, err = pass.Scrypt.NewKey(w.key, pass.Salt); err != nil {
+		return nil, err
+	}
+
+	if aead, err = chacha20poly1305.New(key); err != nil {
 		return nil, err
 	}
 
 	// new nonce on every encrypt
 	pass.Nonce = make([]byte, 8)
-	rand.Read(pass.Nonce)
+	if _, err = rand.Read(pass.Nonce); err != nil {
+		return nil, err
+	}
 
 	pass.Ciphertext = aead.Seal(nil, pass.Nonce, plaintext, nil)
 	return pass, nil
@@ -61,18 +62,18 @@ func NewPassphrase(masterKey []byte, plaintext []byte) (*Passphrase, error) {
 
 // ReadPassphrase reads the given file and returns a Passphrase
 // assuming it contains the necessary data
-func ReadPassphrase(filename string) (*Passphrase, error) {
-	data, err := ioutil.ReadFile(filename)
+func ReadPassphrase(fileName string) (*Passphrase, error) {
+	data, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}
 
-	pass := defaultPassphrase()
+	pass := defaultPassphrase(DefaultWardConfig())
 	json.Unmarshal(data, pass)
-	pass.Filename = filename
+	pass.Filename = fileName
 
 	if binary.Size(pass.Nonce) == 0 || binary.Size(pass.Salt) == 0 || binary.Size(pass.Ciphertext) == 0 {
-		return nil, fmt.Errorf("Invalid Passphrase in %s", filename)
+		return nil, fmt.Errorf("Invalid Passphrase in %s", fileName)
 	}
 
 	return pass, nil

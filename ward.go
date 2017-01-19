@@ -15,14 +15,16 @@ import (
 
 // Ward holds data needed to work with a ward.
 type Ward struct {
-	Dir string
-	key []byte
+	Config WardConfig
+	Dir    string
+	key    []byte
 }
 
 // NewWard creates a Ward.
 func NewWard(masterKey []byte) Ward {
 	return Ward{
-		key: masterKey,
+		Config: DefaultWardConfig(),
+		key:    masterKey,
 	}
 }
 
@@ -52,7 +54,7 @@ type Group struct {
 // Edit sets the entire content of the warded passphrase.
 func (w Ward) Edit(passName string, content []byte) (err error) {
 	var pass *Passphrase
-	if pass, err = NewPassphrase(w.key, content); err == nil {
+	if pass, err = w.NewPassphrase(content); err == nil {
 		pass.Filename = w.Path(passName)
 		err = pass.Write(0600)
 	}
@@ -118,7 +120,7 @@ func (w Ward) Map() (map[string]*Passphrase, error) {
 				return err
 			}
 
-			if pass, err = ReadPassphrase(p); err != nil {
+			if pass, err = ReadPassphrase(w.Path(rel)); err != nil {
 				return err
 			}
 
@@ -151,6 +153,7 @@ func (w Ward) Rekey(newMasterKey []byte, tempDir string) error {
 	defer os.RemoveAll(tmpDir)
 
 	newWard := NewWard(newMasterKey)
+	newWard.Config = w.Config
 	newWard.Dir = tmpDir
 
 	var plaintext []byte
@@ -283,8 +286,6 @@ func (w Ward) checkKey() (err error) {
 		// there were no existing passphrases in the ward
 		// this isn't considered an error
 		return
-	} else if plen == 1 {
-		return fmt.Errorf("Invalid master key")
 	}
 
 	var rind *big.Int

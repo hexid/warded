@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -26,8 +27,10 @@ var (
 	}
 	masterKey warded.Key
 
-	app      = kingpin.New("warded", "A minimal passphrase manager using Chacha20-Poly1305")
-	wardName = app.Flag("ward", "Ward group name").Short('w').Default("default").Envar("WARDED_NAME").String()
+	app        = kingpin.New("warded", "A minimal passphrase manager using Chacha20-Poly1305")
+	wardName   = app.Flag("ward", "Ward group name").Short('w').Default("default").Envar("WARDED_NAME").String()
+	configPath = app.Flag("config", "Config file").Short('c').Envar("WARDED_CONFIG").String()
+	dataPath   = app.Flag("data", "Data directory").Short('d').Envar("WARDED_DATA").String()
 
 	copy             = app.Command("copy", "Copy a passphrase").Alias("cp")
 	copySrcPassName  = copy.Arg("srcPassName", "Source passphrase name").Required().String()
@@ -91,6 +94,45 @@ func main() {
 	}
 }
 
+func getWard() (*warded.Ward, error) {
+	var err error
+
+	config := wardedConfig{
+		Ward: warded.DefaultWardConfig(),
+	}
+
+	if *configPath == "" {
+		if *configPath, err = xdgbasedir.ConfigHomeDirectory(); err != nil {
+			return nil, err
+		}
+		*configPath = path.Join(*configPath, "warded.json")
+	}
+	if configData, cfgErr := ioutil.ReadFile(*configPath); cfgErr == nil {
+		if cfgErr = json.Unmarshal(configData, &config); cfgErr != nil {
+			return nil, cfgErr
+		}
+	}
+
+	if *dataPath == "" {
+		var dataDir string
+		if dataDir, err = xdgbasedir.DataHomeDirectory(); err != nil {
+			return nil, err
+		}
+		*dataPath = path.Join(dataDir, "warded")
+	}
+
+	wardDir := path.Join(*dataPath, *wardName)
+	if err = os.MkdirAll(wardDir, 0700); err != nil {
+		return nil, err
+	}
+
+	ward := warded.NewWard(masterKey)
+	ward.Config = config.Get(*wardName)
+	ward.Dir = wardDir
+
+	return &ward, nil
+}
+
 func mainError() (err error) {
 	commands := kingpin.MustParse(app.Parse(os.Args[1:]))
 
@@ -98,18 +140,10 @@ func mainError() (err error) {
 		defer masterKey.Unlock()
 	}
 
-	var dataDir string
-	if dataDir, err = xdgbasedir.DataHomeDirectory(); err != nil {
-		return
+	ward, err := getWard()
+	if err != nil {
+		return err
 	}
-
-	wardDir := path.Join(dataDir, "warded", *wardName)
-	if err = os.MkdirAll(wardDir, 0700); err != nil {
-		return
-	}
-
-	ward := warded.NewWard(masterKey)
-	ward.Dir = wardDir
 
 	switch commands {
 	case copy.FullCommand():
@@ -223,7 +257,7 @@ func mainError() (err error) {
 			defer newMasterKey.Unlock()
 		}
 		if err == nil {
-			err = ward.Rekey(newMasterKey, path.Join(dataDir, "warded"))
+			err = ward.Rekey(newMasterKey, *dataPath)
 		}
 
 	case remove.FullCommand():
