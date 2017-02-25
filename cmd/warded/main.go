@@ -37,7 +37,7 @@ var (
 	copyDestPassName = copy.Arg("destPassName", "Destination passphrase name").Required().String()
 
 	data         = app.Command("data", "Show remainder of lines starting with a given regexp").Action(loadMasterKey)
-	dataMaxMatch = data.Flag("max", "Match at most <MAX> line(s)").Short('n').Uint()
+	dataMaxMatch = data.Flag("max", "Match at most <MAX> line(s)").Short('m').Uint()
 	dataPassName = data.Arg("passName", "Passphrase name").Required().String()
 	dataRegexp   = data.Arg("regexp", "String that matches against the start of each line").Required().Regexp()
 
@@ -51,6 +51,7 @@ var (
 	grep           = app.Command("grep", "Search for text in the ward").Action(loadMasterKey)
 	grepIgnoreCase = grep.Flag("icase", "Ignore case when matching").Short('i').Bool()
 	grepRegexp     = grep.Arg("regexp", "Search term").Required().Regexp()
+	grepPath       = grep.Arg("path", "Search path").String()
 
 	list = app.Command("list", "List passphrases").Alias("ls")
 
@@ -69,6 +70,7 @@ var (
 
 	stats     = app.Command("stats", "Get statistics on passphrases in the ward").Action(loadMasterKey)
 	statsJSON = stats.Flag("json", "Print the unprocessed statistics as JSON").Bool()
+	statsPath = stats.Arg("path", "Statistics path").String()
 )
 
 func loadMasterKey(ctx *kingpin.ParseContext) (err error) {
@@ -89,7 +91,7 @@ func requestKey() (warded.Key, error) {
 
 func main() {
 	if err := mainError(); err != nil {
-		fmt.Println(err.Error())
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 }
@@ -97,7 +99,7 @@ func main() {
 func getWard() (*warded.Ward, error) {
 	var err error
 
-	config := wardedConfig{
+	config := warded.Config{
 		Ward: warded.DefaultWardConfig(),
 	}
 
@@ -127,7 +129,7 @@ func getWard() (*warded.Ward, error) {
 	}
 
 	ward := warded.NewWard(masterKey)
-	ward.Config = config.Get(*wardName)
+	ward.Config = config.GetWardConfig(*wardName)
 	ward.Dir = wardDir
 
 	return &ward, nil
@@ -225,7 +227,7 @@ func mainError() (err error) {
 				return err
 			}
 		}
-		results, err = ward.Search(*grepRegexp)
+		results, err = ward.Search(*grepPath, *grepRegexp)
 		for _, res := range results {
 			ct.Foreground(ct.Blue, false)
 			fmt.Printf("%s:%d ", res.Passphrase, res.LineNum+1)
@@ -275,7 +277,7 @@ func mainError() (err error) {
 
 	case stats.FullCommand():
 		var statistics *warded.Statistics
-		if statistics, err = ward.Stats(); err == nil {
+		if statistics, err = ward.Stats(*statsPath); err == nil {
 			if *statsJSON {
 				var jsonStats []byte
 				jsonStats, err = json.Marshal(statistics)

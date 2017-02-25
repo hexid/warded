@@ -54,7 +54,7 @@ type Group struct {
 // Edit sets the entire content of the warded passphrase.
 func (w Ward) Edit(passName string, content []byte) (err error) {
 	var pass *Passphrase
-	if pass, err = w.NewPassphrase(content); err == nil {
+	if pass, err = w.newPassphrase(content); err == nil {
 		pass.Filename = w.Path(passName)
 		err = pass.Write(0600)
 	}
@@ -105,9 +105,9 @@ func (w Ward) List() ([]string, error) {
 }
 
 // Map returns a map of passphrase names to the warded passphrase.
-func (w Ward) Map() (map[string]*Passphrase, error) {
+func (w Ward) Map(path string) (map[string]*Passphrase, error) {
 	passphrases := make(map[string]*Passphrase)
-	err := filepath.Walk(w.Dir, func(p string, info os.FileInfo, err error) error {
+	err := filepath.Walk(w.Path(path), func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -141,7 +141,7 @@ func (w Ward) Path(passName string) string {
 // Rekey changes the master key for the entire ward.
 // Any errors will cancel the operation, leaving the ward with the existing key.
 func (w Ward) Rekey(newMasterKey []byte, tempDir string) error {
-	passphrases, err := w.Map()
+	passphrases, err := w.Map("")
 	if err != nil {
 		return err
 	}
@@ -175,10 +175,10 @@ func (w Ward) Rekey(newMasterKey []byte, tempDir string) error {
 
 // Search searches through a ward, printing lines
 // that match the given regular expression.
-func (w Ward) Search(regex *regexp.Regexp) ([]SearchResult, error) {
+func (w Ward) Search(path string, regex *regexp.Regexp) ([]SearchResult, error) {
 	var err error
 	var passphrases map[string]*Passphrase
-	if passphrases, err = w.Map(); err != nil {
+	if passphrases, err = w.Map(path); err != nil {
 		return nil, err
 	}
 
@@ -206,8 +206,8 @@ func (w Ward) Search(regex *regexp.Regexp) ([]SearchResult, error) {
 }
 
 // Stats returns statistics for the current ward.
-func (w Ward) Stats() (*Statistics, error) {
-	passphrases, err := w.Map()
+func (w Ward) Stats(path string) (*Statistics, error) {
+	passphrases, err := w.Map(path)
 	if err != nil {
 		return nil, err
 	}
@@ -253,8 +253,6 @@ func (w Ward) Stats() (*Statistics, error) {
 
 // Update replaces the first line of a passphrase with the given string.
 func (w Ward) Update(passName string, passStr []byte) (string, error) {
-	passPath := w.Path(passName)
-
 	pass, err := w.GetOrCheck(passName)
 	if err != nil {
 		return "", err
@@ -268,7 +266,7 @@ func (w Ward) Update(passName string, passStr []byte) (string, error) {
 
 	newPass := append(passStr, '\n')
 	newPass = append(newPass, split[1]...)
-	if err = w.Edit(passPath, newPass); err != nil {
+	if err = w.Edit(passName, newPass); err != nil {
 		return "", err
 	}
 

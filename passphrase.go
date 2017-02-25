@@ -1,62 +1,42 @@
 package warded
 
 import (
-	"crypto/cipher"
-	"crypto/rand"
-	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	"github.com/codahale/chacha20poly1305"
 )
 
 // Passphrase is the encrypted passphrase
 type Passphrase struct {
-	Nonce      []byte `json:"nonce"`
-	Salt       []byte `json:"salt"`
-	Ciphertext []byte `json:"ciphertext"`
-	Filename   string `json:"-"`
-	Scrypt     Scrypt `json:"scrypt"`
+	Cipher        CipherConfig        `json:"cipher"`
+	KeyDerivation KeyDerivationConfig `json:"keyDerivation"`
+	Filename      string              `json:"-"`
 }
 
 func defaultPassphrase(config WardConfig) *Passphrase {
 	return &Passphrase{
-		Scrypt: config.Scrypt,
+		Cipher:        newCipher(config.Cipher),
+		KeyDerivation: config.KeyDerivation,
 	}
 }
 
 // NewPassphrase creates a new encrypted passphrase.
 // A new passphrase should be generated every time the plaintext is changed
-func (w Ward) NewPassphrase(plaintext []byte) (*Passphrase, error) {
+func (w Ward) newPassphrase(plaintext []byte) (*Passphrase, error) {
 	var err error
-	var key []byte
-	var aead cipher.AEAD
 	pass := defaultPassphrase(w.Config)
 
 	// new salt on every encrypt
-	pass.Salt = make([]byte, 8)
-	if _, err = rand.Read(pass.Salt); err != nil {
+	if err = pass.KeyDerivation.Data.newSalt(); err != nil {
 		return nil, err
 	}
 
-	if key, err = pass.Scrypt.NewKey(w.key, pass.Salt); err != nil {
+	keyFn := pass.KeyDerivation.Data.newKeyFn(w.key)
+	if err = pass.Cipher.Data.Seal(plaintext, keyFn); err != nil {
 		return nil, err
 	}
 
-	if aead, err = chacha20poly1305.New(key); err != nil {
-		return nil, err
-	}
-
-	// new nonce on every encrypt
-	pass.Nonce = make([]byte, 8)
-	if _, err = rand.Read(pass.Nonce); err != nil {
-		return nil, err
-	}
-
-	pass.Ciphertext = aead.Seal(nil, pass.Nonce, plaintext, nil)
 	return pass, nil
 }
 
@@ -72,25 +52,14 @@ func ReadPassphrase(fileName string) (*Passphrase, error) {
 	json.Unmarshal(data, pass)
 	pass.Filename = fileName
 
-	if binary.Size(pass.Nonce) == 0 || binary.Size(pass.Salt) == 0 || binary.Size(pass.Ciphertext) == 0 {
-		return nil, fmt.Errorf("Invalid Passphrase in %s", fileName)
-	}
-
 	return pass, nil
 }
 
 // Decrypt returns the plaintext passphrase, assuming
 // that the correct master key has been provided.
 func (pass Passphrase) Decrypt(masterKey []byte) ([]byte, error) {
-	var plaintext, key []byte
-	var aead cipher.AEAD
-	var err error
-	if key, err = pass.Scrypt.NewKey(masterKey, pass.Salt); err == nil {
-		if aead, err = chacha20poly1305.New(key); err == nil {
-			plaintext, err = aead.Open(nil, pass.Nonce, pass.Ciphertext, nil)
-		}
-	}
-	return plaintext, err
+	keyFn := pass.KeyDerivation.Data.newKeyFn(masterKey)
+	return pass.Cipher.Data.Open(keyFn)
 }
 
 // Write writes the Passphrase to a given file with the provided permissions
