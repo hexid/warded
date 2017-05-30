@@ -3,7 +3,6 @@ package warded
 import (
 	"bytes"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -252,25 +251,25 @@ func (w Ward) Stats(path string) (*Statistics, error) {
 }
 
 // Update replaces the first line of a passphrase with the given string.
-func (w Ward) Update(passName string, passStr []byte) (string, error) {
+func (w Ward) Update(passName string, passStr []byte) ([]byte, error) {
 	pass, err := w.GetOrCheck(passName)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+
+	newPass := passStr
 
 	split := bytes.SplitN(pass, []byte("\n"), 2)
-	if len(split) < 2 {
-		// there was no existing passphrase, so we need to pretend there was
-		split = make([][]byte, 2)
+	if len(split) != 1 {
+		newPass = append(newPass, '\n')
+		newPass = append(newPass, split[1]...)
 	}
 
-	newPass := append(passStr, '\n')
-	newPass = append(newPass, split[1]...)
 	if err = w.Edit(passName, newPass); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return string(split[0]), nil
+	return split[0], nil
 }
 
 func (w Ward) checkKey() (err error) {
@@ -298,7 +297,7 @@ func (w Ward) checkKey() (err error) {
 
 	// check that the provided master key can decrypt the random passphrase
 	if _, err = pass.Decrypt(w.key); err != nil {
-		err = errors.New("Only one master key is allowed per ward")
+		err = fmt.Errorf("Only one master key is allowed per ward")
 	}
 
 	return

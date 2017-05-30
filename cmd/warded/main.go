@@ -208,7 +208,7 @@ func mainError() (err error) {
 		}
 
 	case generate.FullCommand():
-		var oldPass string
+		var oldPass []byte
 		var randStr []byte
 		randType := randstr.RandASCII
 		if randStr, err = randstr.Random(*generateLength, randType.String()); err == nil {
