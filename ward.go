@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -247,6 +248,8 @@ func (w Ward) Stats(path string) (*Statistics, error) {
 		}
 		ind++
 	}
+
+	sort.Slice(groups, func(i, j int) bool { return groups[i].Length < groups[j].Length })
 
 	return &Statistics{
 		Groups:    groups,
