@@ -273,8 +273,9 @@ func mainError() (err error) {
 		var pass []byte
 		if pass, err = ward.Get(*showPassName); err == nil {
 			if *showOnlyFirst {
-				ind := bytes.IndexByte(pass, '\n') + 1
-				pass = pass[:ind]
+				if ind := bytes.IndexByte(pass, '\n') + 1; ind != 0 {
+					pass = pass[:ind]
+				}
 			}
 			fmt.Println(string(pass[:]))
 		}
