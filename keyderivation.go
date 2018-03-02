@@ -46,14 +46,19 @@ type KeyDerivationConfig struct {
 // function to marshal the data into.
 func (c *KeyDerivationConfig) UnmarshalJSON(b []byte) error {
 	var temp struct {
-		Type keyDerivationType
+		Type *keyDerivationType
 		Data *json.RawMessage
 	}
 	if err := json.Unmarshal(b, &temp); err != nil {
 		return err
 	}
-	c.Type = temp.Type
-	c.Data = keyDerivationTypeHandlers[c.Type]()
+
+	if temp.Type != nil {
+		c.Type = *temp.Type
+	}
+	if temp.Data == nil {
+		c.Data = keyDerivationTypeHandlers[c.Type]()
+	}
 	return json.Unmarshal(*temp.Data, &c.Data)
 }
 

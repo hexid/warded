@@ -39,11 +39,10 @@ type Config struct {
 // GetWardConfig returns the ward-specific configuration,
 // if one exists. Otherwise, the general config is returned.
 func (c Config) GetWardConfig(name string) WardConfig {
-	config := c.Ward
 	if wardConf, ok := c.Wards[name]; ok {
-		config = wardConf
+		return wardConf
 	}
-	return config
+	return c.Ward
 }
 
 // UnmarshalJSON unmarshals the warded configuration.
@@ -64,11 +63,18 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	}
 
 	for name, raw := range config.Wards {
-		base := config.Ward
-		if err := json.Unmarshal(*raw, &base); err != nil {
+		base := struct {
+			Ward WardConfig `json:"ward"`
+		}{
+			Ward: DefaultWardConfig(),
+		}
+		if err := json.Unmarshal(data, &base); err != nil {
 			return err
 		}
-		c.Wards[name] = base
+		if err := json.Unmarshal(*raw, &base.Ward); err != nil {
+			return err
+		}
+		c.Wards[name] = base.Ward
 	}
 
 	return nil
