@@ -86,9 +86,9 @@ func (w Ward) GetOrCheck(passName string) ([]byte, error) {
 }
 
 // List returns a list of passphrase names in the ward
-func (w Ward) List() ([]string, error) {
+func (w Ward) List(path string) ([]string, error) {
 	passphrases := make([]string, 0)
-	err := filepath.Walk(w.Dir, func(p string, info os.FileInfo, err error) error {
+	err := filepath.Walk(w.Path(path), func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -281,9 +281,10 @@ func (w Ward) Update(passName string, passStr []byte) ([]byte, error) {
 	return split[0], nil
 }
 
+// checkKey attempts to decrypt a random passphrase in the ward
 func (w Ward) checkKey() (err error) {
 	var passphrases []string
-	if passphrases, err = w.List(); err != nil {
+	if passphrases, err = w.List(""); err != nil {
 		return
 	}
 

@@ -57,6 +57,7 @@ var (
 	grepPath       = grep.Arg("path", "Search path").String()
 
 	list     = app.Command("list", "List passphrases").Alias("ls")
+	listPath = list.Arg("path", "List path").String()
 
 	move             = app.Command("move", "Move a passphrase").Alias("mv")
 	moveSrcPassName  = move.Arg("srcPassName", "Source passphrase name").Required().String()
@@ -77,7 +78,7 @@ var (
 )
 
 func listWard() []string {
-	list, _ := ward.List()
+	list, _ := ward.List("")
 	return list
 }
 
@@ -245,7 +246,7 @@ func mainError() (err error) {
 
 	case list.FullCommand():
 		var passphrases []string
-		if passphrases, err = ward.List(); err == nil {
+		if passphrases, err = ward.List(*listPath); err == nil {
 			sort.Strings(passphrases)
 
 			for _, name := range passphrases {
