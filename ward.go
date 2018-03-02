@@ -20,10 +20,9 @@ type Ward struct {
 }
 
 // NewWard creates a Ward.
-func NewWard(masterKey []byte) Ward {
+func NewWard() Ward {
 	return Ward{
 		Config: DefaultWardConfig(),
-		key:    masterKey,
 	}
 }
 
@@ -48,6 +47,10 @@ type Statistics struct {
 type Group struct {
 	Length      int      `json:"len"`
 	Passphrases []string `json:"pass"`
+}
+
+func (w *Ward) SetKey(key []byte) {
+	w.key = key
 }
 
 // Edit sets the entire content of the warded passphrase.
@@ -151,14 +154,15 @@ func (w Ward) Rekey(newMasterKey []byte, tempDir string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	newWard := NewWard(newMasterKey)
+	newWard := NewWard()
+	newWard.SetKey(newMasterKey)
 	newWard.Config = w.Config
 	newWard.Dir = tmpDir
 
 	var plaintext []byte
 	for passName, warded := range passphrases {
 		if plaintext, err = warded.Decrypt(w.key); err != nil {
-			return fmt.Errorf("Invalid master key for %s\n", passName)
+			return fmt.Errorf("Invalid master key for %s", passName)
 		}
 
 		if err = newWard.Edit(passName, plaintext); err != nil {

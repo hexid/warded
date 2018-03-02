@@ -21,6 +21,8 @@ import (
 )
 
 var (
+	ward warded.Ward
+
 	pinRequest = pinentry.Request{
 		Desc:   "Warded Master Key",
 		Prompt: "Master Key",
@@ -28,32 +30,33 @@ var (
 	masterKey warded.Key
 
 	app        = kingpin.New("warded", "A minimal passphrase manager using Chacha20-Poly1305")
+	help       = app.HelpFlag.Short('h')
 	wardName   = app.Flag("ward", "Ward group name").Short('w').Default("default").Envar("WARDED_NAME").String()
 	configPath = app.Flag("config", "Config file").Short('c').Envar("WARDED_CONFIG").String()
 	dataPath   = app.Flag("data", "Data directory").Short('d').Envar("WARDED_DATA").String()
 
 	copy             = app.Command("copy", "Copy a passphrase").Alias("cp")
-	copySrcPassName  = copy.Arg("srcPassName", "Source passphrase name").Required().String()
+	copySrcPassName  = copy.Arg("srcPassName", "Source passphrase name").HintAction(listWard).Required().String()
 	copyDestPassName = copy.Arg("destPassName", "Destination passphrase name").Required().String()
 
 	data         = app.Command("data", "Show remainder of lines starting with a given regexp").Action(loadMasterKey)
 	dataMaxMatch = data.Flag("max", "Match at most <MAX> line(s)").Short('m').Uint()
-	dataPassName = data.Arg("passName", "Passphrase name").Required().String()
+	dataPassName = data.Arg("passName", "Passphrase name").HintAction(listWard).Required().String()
 	dataRegexp   = data.Arg("regexp", "String that matches against the start of each line").Required().Regexp()
 
 	edit         = app.Command("edit", "Edit passphrase").Action(loadMasterKey)
-	editPassName = edit.Arg("passName", "Passphrase name").Required().String()
+	editPassName = edit.Arg("passName", "Passphrase name").HintAction(listWard).Required().String()
 
 	generate         = app.Command("generate", "Generate passphrase")
 	generateLength   = generate.Arg("passLength", "Passphrase length").Required().Uint()
-	generatePassName = generate.Arg("passName", "Passphrase name").Action(loadMasterKey).String()
+	generatePassName = generate.Arg("passName", "Passphrase name").HintAction(listWard).Action(loadMasterKey).String()
 
 	grep           = app.Command("grep", "Search for text in the ward").Action(loadMasterKey)
 	grepIgnoreCase = grep.Flag("icase", "Ignore case when matching").Short('i').Bool()
 	grepRegexp     = grep.Arg("regexp", "Search term").Required().Regexp()
 	grepPath       = grep.Arg("path", "Search path").String()
 
-	list = app.Command("list", "List passphrases").Alias("ls")
+	list     = app.Command("list", "List passphrases").Alias("ls")
 
 	move             = app.Command("move", "Move a passphrase").Alias("mv")
 	moveSrcPassName  = move.Arg("srcPassName", "Source passphrase name").Required().String()
@@ -62,31 +65,34 @@ var (
 	rekey = app.Command("rekey", "Rekey all passphrases in the ward").Action(loadMasterKey)
 
 	remove         = app.Command("remove", "Remove a passphrase").Alias("rm")
-	removePassName = remove.Arg("passName", "Passphrase name").Required().String()
+	removePassName = remove.Arg("passName", "Passphrase name").HintAction(listWard).Required().String()
 
 	show          = app.Command("show", "Show passphrase").Action(loadMasterKey)
 	showOnlyFirst = show.Flag("first", "Show only the first line").Short('1').Bool()
-	showPassName  = show.Arg("passName", "Passphrase name").Required().String()
+	showPassName  = show.Arg("passName", "Passphrase name").HintAction(listWard).Required().String()
 
 	stats     = app.Command("stats", "Get statistics on passphrases in the ward").Action(loadMasterKey)
 	statsJSON = stats.Flag("json", "Print the unprocessed statistics as JSON").Bool()
 	statsPath = stats.Arg("path", "Statistics path").String()
 )
 
+func listWard() []string {
+	list, _ := ward.List()
+	return list
+}
+
 func loadMasterKey(ctx *kingpin.ParseContext) (err error) {
 	masterKey, err = requestKey()
 	return
 }
-func requestKey() (warded.Key, error) {
-	var key warded.Key
-	keyStr, err := pinRequest.GetPIN()
-	if err == nil {
+func requestKey() (key warded.Key, err error) {
+	if keyStr, err := pinRequest.GetPIN(); err == nil {
 		key = []byte(keyStr)
 		err = key.Lock()
 	} else if err == pinentry.ErrCancel {
 		err = fmt.Errorf("Exiting. Pinentry cancelled")
 	}
-	return key, err
+	return
 }
 
 func main() {
@@ -96,7 +102,7 @@ func main() {
 	}
 }
 
-func getWard() (*warded.Ward, error) {
+func getWard(ctx *kingpin.ParseContext) error {
 	var err error
 
 	config := warded.Config{
@@ -105,47 +111,45 @@ func getWard() (*warded.Ward, error) {
 
 	if *configPath == "" {
 		if *configPath, err = xdgbasedir.ConfigHomeDirectory(); err != nil {
-			return nil, err
+			return err
 		}
 		*configPath = path.Join(*configPath, "warded.json")
 	}
 	if configData, cfgErr := ioutil.ReadFile(*configPath); cfgErr == nil {
 		if cfgErr = json.Unmarshal(configData, &config); cfgErr != nil {
-			return nil, cfgErr
+			return cfgErr
 		}
 	}
 
 	if *dataPath == "" {
 		var dataDir string
 		if dataDir, err = xdgbasedir.DataHomeDirectory(); err != nil {
-			return nil, err
+			return err
 		}
 		*dataPath = path.Join(dataDir, "warded")
 	}
 
 	wardDir := path.Join(*dataPath, *wardName)
 	if err = os.MkdirAll(wardDir, 0700); err != nil {
-		return nil, err
+		return err
 	}
 
-	ward := warded.NewWard(masterKey)
+	ward = warded.NewWard()
 	ward.Config = config.GetWardConfig(*wardName)
 	ward.Dir = wardDir
 
-	return &ward, nil
+	return err
 }
 
 func mainError() (err error) {
+	app.PreAction(getWard)
 	commands := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	if masterKey != nil {
 		defer masterKey.Unlock()
 	}
 
-	ward, err := getWard()
-	if err != nil {
-		return err
-	}
+	ward.SetKey(masterKey)
 
 	switch commands {
 	case copy.FullCommand():
