@@ -48,6 +48,7 @@ var (
 	editPassName = edit.Arg("passName", "Passphrase name").HintAction(listWard).Required().String()
 
 	generate         = app.Command("generate", "Generate passphrase")
+	generateSpecial  = generate.Flag("special", "Allowed special characters").Short('s').Default("\000").String()
 	generateLength   = generate.Arg("passLength", "Passphrase length").Required().Uint()
 	generatePassName = generate.Arg("passName", "Passphrase name").HintAction(listWard).Action(loadMasterKey).String()
 
@@ -215,8 +216,18 @@ func mainError() (err error) {
 	case generate.FullCommand():
 		var oldPass []byte
 		var randStr []byte
-		randType := randstr.RandASCII
-		if randStr, err = randstr.Random(*generateLength, randType.String()); err == nil {
+		var availRand string
+
+		if *generateSpecial != "\000" {
+			availRand = (randstr.AlphaASCII | randstr.DigitASCII).String() + *generateSpecial
+
+			// strip out any duplicate characters
+			availRand = string(uniqRunes([]rune(availRand)))
+		} else {
+			availRand = randstr.RandASCII.String()
+		}
+
+		if randStr, err = randstr.Random(*generateLength, availRand); err == nil {
 			if *generatePassName == "" {
 				fmt.Printf("Passphrase: %s\n", randStr)
 			} else if oldPass, err = ward.Update(*generatePassName, randStr); err == nil {
