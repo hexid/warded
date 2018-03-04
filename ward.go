@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/bmatcuk/doublestar"
 )
 
 // Ward holds data needed to work with a ward.
@@ -86,9 +88,10 @@ func (w Ward) GetOrCheck(passName string) ([]byte, error) {
 }
 
 // List returns a list of passphrase names in the ward
-func (w Ward) List(path string) ([]string, error) {
+func (w Ward) List(pathPattern string) ([]string, error) {
 	passphrases := make([]string, 0)
-	err := filepath.Walk(w.Path(path), func(p string, info os.FileInfo, err error) error {
+
+	e := w.walkPathPattern(pathPattern, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -105,13 +108,15 @@ func (w Ward) List(path string) ([]string, error) {
 
 		return nil
 	})
-	return passphrases, err
+
+	return passphrases, e
 }
 
 // Map returns a map of passphrase names to the warded passphrase.
-func (w Ward) Map(path string) (map[string]*Passphrase, error) {
+func (w Ward) Map(pathPattern string) (map[string]*Passphrase, error) {
 	passphrases := make(map[string]*Passphrase)
-	err := filepath.Walk(w.Path(path), func(p string, info os.FileInfo, err error) error {
+
+	e := w.walkPathPattern(pathPattern, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -133,7 +138,7 @@ func (w Ward) Map(path string) (map[string]*Passphrase, error) {
 		return nil
 	})
 
-	return passphrases, err
+	return passphrases, e
 }
 
 // Path returns the path to a passphrase.
@@ -311,4 +316,21 @@ func (w Ward) checkKey() (err error) {
 	}
 
 	return
+}
+
+func (w Ward) walkPathPattern(pathPattern string, walkFn filepath.WalkFunc) error {
+	var err error
+	var paths []string
+
+	if paths, err = doublestar.Glob(w.Path(pathPattern)); err == nil {
+		for _, path := range paths {
+			err = filepath.Walk(path, walkFn)
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return err
 }
