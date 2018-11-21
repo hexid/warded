@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+set -e
+
+parseOTPAuthURI() {
+	local type label params
+	IFS=$'\v' read type label params <<< "$(printf "$1" | sed -En 's/^otpauth:\/\/([ht]otp)\/([^?]*)\?(.+)$/\1\v\2\v\3/p')"
+	if [ -z "${type}" ]; then
+		return 1
+	fi
+
+	local secret=""
+	local digits=""
+	local algorithm="sha1"
+
+	local OTP_PARAMS
+	IFS='&' read -ra OTP_PARAMS <<< "${params}"
+	for param in "${OTP_PARAMS[@]}"; do
+		case "${param}" in
+			secret=*)
+				secret="${param:7}"
+				;;
+			digits=*)
+				digits="${param:7}"
+				;;
+			algorithm=*)
+				algorithm="${param:10}"
+				;;
+			*)
+				# printf 'unknown: %s\n' "${param}"
+				;;
+		esac
+	done
+
+	if [ -z "${secret}" ]; then
+		printf 'no secret\n' >&2
+		exit 1
+	fi
+
+	if [ "${type}" == "totp" ]; then
+		type="${type}=${algorithm}"
+	fi
+
+	oathtool --base32 --digits "${digits:-6}" "--${type}" "${secret}"
+}
+
+parseOTPAuthURI "${1-"$(cat)"}"

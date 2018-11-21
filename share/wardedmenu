@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+options=""
+data=""
+otp=false
+
+while getopts :c:d:w:D:O: opt; do
+	case $opt in
+		c) options="${options} -c ${OPTARG}" ;;
+		d) options="${options} -d ${OPTARG}" ;;
+		w) options="${options} -w ${OPTARG}" ;;
+		D)
+			data="${OPTARG}"
+			;;
+		O)
+			data="${OPTARG}"
+			otp=true
+			;;
+	esac
+done
+
+shift $((OPTIND-1))
+
+passphrase=$(printf "%s\n" "$(warded ${options} ls)" | dmenu "$@")
+
+[[ -n "${passphrase}" ]] || exit
+
+if [[ -z "${data}" ]]; then
+	output="$(warded show -1 ${options} "${passphrase}" 2>/dev/null)"
+else
+	output="$(warded data ${options} "${passphrase}" "${data}" 2>/dev/null)"
+	if [[ $otp == true ]]; then
+		output="$(printf '%s' "${output}" | otpauth 2>/dev/null)"
+	fi
+fi
+
+printf '%s' "${output}" | xclip -r -selection clipboard
