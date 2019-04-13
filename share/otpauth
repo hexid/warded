@@ -1,10 +1,12 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
 set -e
 
 parseOTPAuthURI() {
-	local type label params
-	IFS=$'\v' read type label params <<< "$(printf "$1" | sed -En 's/^otpauth:\/\/([ht]otp)\/([^?]*)\?(.+)$/\1\v\2\v\3/p')"
+	local data="$(printf "$1" | sed -En 's/^otpauth:\/\/([ht]otp)\/([^\?]*)\?(.+)$/\1\t\2\t\3/p')"
+	local type="$(printf "$data" | cut -f1)"
+	local label="$(printf "$data" | cut -f2)"
+	local params="$(printf "$data" | cut -f3)"
 	if [ -z "${type}" ]; then
 		return 1
 	fi
@@ -33,7 +35,7 @@ parseOTPAuthURI() {
 	done
 
 	if [ -z "${secret}" ]; then
-		printf 'no secret\n' >&2
+		printf 'no secret\n'
 		exit 1
 	fi
 
